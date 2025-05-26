@@ -563,13 +563,243 @@ OpenMM simulation failed
 - **Std_Score**: Score consistency (lower = more consistent)
 - **Min/Max_Score**: Score range across conformations
 
-## 🤝 Contributing
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+# CRAFT Cavity Extractor 🕳️
+
+A tool to find and extract binding pockets (cavities) from protein structures using a CRAFT-inspired algorithm.
+
+## 📋 What Does This Tool Do?
+
+This tool finds empty spaces (cavities) inside proteins where small molecules or peptides could bind. Think of it like finding caves inside a mountain - the protein is the mountain, and we're looking for hollow spaces where drugs could fit.
+
+## 🚀 Quick Start
+
+### Basic Usage
+```bash
+python craft_cavity_extractor.py -p protein.pdb -c "x,y,z" -s "40,40,40"
+```
+
+### Example
+```bash
+python craft_cavity_extractor.py -p PSMA.pdb -c "27.052,58.975,42.259" -s "40,40,40"
+```
+
+## 📖 Required Parameters
+
+| Parameter | What It Does | Example |
+|-----------|--------------|---------|
+| `-p, --protein` | Your protein PDB file | `-p PSMA.pdb` |
+| `-c, --center` | Where to look (x,y,z coordinates) | `-c "27,58,42"` |
+| `-s, --size` | How big area to search (width,height,depth) | `-s "40,40,40"` |
+
+## ⚙️ Optional Parameters (The Fun Stuff!)
+
+### 🎯 **Cavity Size Control**
+
+| Parameter | Default | What It Does | Make Cavity... |
+|-----------|---------|--------------|----------------|
+| `--surface-buffer` | 1.0 | How far from protein surface | **Smaller**: 0.3, **Bigger**: 1.5 |
+| `--min-burial` | 3 | How "buried" cavity must be | **Bigger**: 1, **Smaller**: 5 |
+| `--min-cavity-atoms` | 15 | Minimum protein atoms around cavity | **More cavities**: 10, **Fewer**: 25 |
+
+### 🔍 **Detection Sensitivity**
+
+| Parameter | Default | What It Does | More Sensitive | Less Sensitive |
+|-----------|---------|--------------|----------------|----------------|
+| `--susceptible-radius` | 4.0 | Size of spaces to detect | 3.0 | 5.0 |
+| `--susceptible-volume` | 4.0 | Volume of spaces to detect | 2.0 | 6.0 |
+| `--probe-radius` | 1.4 | Size of probe sphere | 1.0 | 2.0 |
+
+### 🎨 **Shape & Quality**
+
+| Parameter | Default | What It Does | When to Use |
+|-----------|---------|--------------|-------------|
+| `--refine-shape` | Off | Clean up cavity shape | For prettier cavities (but smaller) |
+| `--connection-distance` | 3.0 | How close cavity parts must be | **Connect more**: 4.0, **Separate**: 2.0 |
+
+## 🎛️ **Parameter Recipes**
+
+### 🍰 **For BIGGER, FULLER Cavities**
+```bash
+python craft_cavity_extractor.py \
+  -p protein.pdb -c "x,y,z" -s "40,40,40" \
+  --surface-buffer 0.3 \
+  --min-burial 1 \
+  --susceptible-radius 3.0 \
+  --susceptible-volume 2.0
+```
+
+### 🎯 **For SMALLER, PRECISE Cavities**
+```bash
+python craft_cavity_extractor.py \
+  -p protein.pdb -c "x,y,z" -s "40,40,40" \
+  --surface-buffer 1.5 \
+  --min-burial 5 \
+  --susceptible-radius 5.0 \
+  --refine-shape
+```
+
+### 🔍 **For MANY Small Cavities**
+```bash
+python craft_cavity_extractor.py \
+  -p protein.pdb -c "x,y,z" -s "40,40,40" \
+  --min-cavity-atoms 8 \
+  --susceptible-volume 1.0 \
+  --connection-distance 2.0
+```
+
+## 📁 Output Files
+
+The tool creates several files:
+
+| File | What's Inside |
+|------|---------------|
+| `craft_cavity_unified_cavity.pdb` | **Main result** - All cavity points combined |
+| `craft_cavity_cavity_01.pdb` | Individual cavity #1 |
+| `craft_cavity_cavity_02.pdb` | Individual cavity #2 (if found) |
+| `craft_cavity_protein.pdb` | Protein atoms in your search area |
+| `craft_cavity_analysis.txt` | Summary of what was found |
+
+## 🔬 Viewing Results in PyMOL
+
+```python
+# Load files
+load craft_cavity_protein.pdb
+load craft_cavity_unified_cavity.pdb
+
+# Make it look nice
+show cartoon, craft_cavity_protein
+show spheres, craft_cavity_unified_cavity
+color green, craft_cavity_unified_cavity
+set sphere_scale, 0.3
+```
+
+## 🚨 Troubleshooting
+
+### Problem: "No cavities found"
+**Solutions:**
+- Make your search box bigger: `-s "50,50,50"`
+- Lower the requirements: `--min-cavity-atoms 5`
+- Be less picky: `--susceptible-volume 1.0`
+
+### Problem: "Cavity too small/thin"
+**Solutions:**
+- Get closer to protein: `--surface-buffer 0.3`
+- Less buried requirement: `--min-burial 1`
+- Don't refine shape: remove `--refine-shape`
+
+### Problem: "Cavity too big/messy"
+**Solutions:**
+- Stay further from protein: `--surface-buffer 1.5`
+- More buried requirement: `--min-burial 4`
+- Clean it up: `--refine-shape`
+
+### Problem: "Too many small cavities"
+**Solutions:**
+- Bigger minimum size: `--min-cavity-atoms 20`
+- Connect them: `--connection-distance 4.0`
+- Higher volume threshold: `--susceptible-volume 5.0`
+
+## 🧠 Understanding the Algorithm
+
+### Step 1: Load Protein
+- Reads your PDB file
+- Focuses on the area you specified
+
+### Step 2: Build 3D Network
+- Creates triangular mesh connecting all atoms
+- Like building a 3D spider web between atoms
+
+### Step 3: Find Empty Spaces
+- Looks for big gaps in the mesh
+- These gaps are potential cavities
+
+### Step 4: Clean Up
+- Removes spaces too close to surface
+- Keeps only well-defined cavities
+- Connects nearby cavity parts
+
+### Step 5: Extract Points
+- Places points throughout the cavity
+- Creates the final cavity shape
+
+## 📊 Parameter Impact Guide
+
+| Want More... | Adjust These |
+|--------------|--------------|
+| **Cavity Points** | ↓ `surface-buffer`, ↓ `min-burial` |
+| **Cavity Size** | ↓ `susceptible-volume`, ↓ `min-cavity-atoms` |
+| **Cavity Depth** | ↑ `min-burial`, ↓ `probe-radius` |
+| **Connected Cavities** | ↑ `connection-distance` |
+| **Clean Shape** | Add `--refine-shape` |
+
+## 🎯 Common Use Cases
+
+### Drug Discovery
+```bash
+# Find binding pockets for small molecules
+--surface-buffer 0.5 --min-burial 2 --probe-radius 1.4
+```
+
+### Peptide Binding
+```bash
+# Find larger pockets for peptides
+--surface-buffer 0.3 --min-burial 1 --susceptible-volume 2.0
+```
+
+### Allosteric Sites
+```bash
+# Find hidden regulatory sites
+--min-cavity-atoms 10 --susceptible-radius 3.0 --refine-shape
+```
+
+## 💡 Pro Tips
+
+1. **Start Simple**: Use default parameters first, then adjust
+2. **Visualize Often**: Load results in PyMOL after each run
+3. **Compare Parameters**: Try different settings and compare results
+4. **Know Your Protein**: Larger proteins need larger search boxes
+5. **Check the Analysis**: Read `craft_cavity_analysis.txt` for insights
+
+## 🆘 Need Help?
+
+1. **Check the analysis file** - It tells you what was found
+2. **Try the parameter recipes** above
+3. **Start with bigger, less strict parameters** and narrow down
+4. **Visualize intermediate results** to understand what's happening
+
+## 📝 Example Commands
+
+### Basic Cavity Finding
+```bash
+python craft_cavity_extractor.py -p protein.pdb -c "25,30,35" -s "30,30,30"
+```
+
+### Detailed Analysis
+```bash
+python craft_cavity_extractor.py \
+  -p protein.pdb \
+  -c "25,30,35" \
+  -s "40,40,40" \
+  --surface-buffer 0.5 \
+  --min-burial 2 \
+  --refine-shape \
+  -o detailed_cavity
+```
+
+### Quick and Dirty
+```bash
+python craft_cavity_extractor.py \
+  -p protein.pdb \
+  -c "25,30,35" \
+  -s "50,50,50" \
+  --min-cavity-atoms 5 \
+  --surface-buffer 0.2
+```
+
+---
+
+
 
 ## 📄 License
 
